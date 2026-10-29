@@ -1,0 +1,8 @@
+# Dependências e caches
+node_modules/
+.netlify/
+*.log
+*.zip
+
+# Builds temporários
+dist/
