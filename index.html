@@ -2029,10 +2029,18 @@ $("#themeBtn").onclick = () => setTheme(document.documentElement.dataset.theme =
 async function api(path, {method = "GET", body, auth = true, headers = {}} = {}){
   const h = {apikey: CLOUD.anonKey, "Content-Type": "application/json", ...headers};
   if (auth && sess) h.Authorization = "Bearer " + sess.access_token;
-  const r = await fetch(CLOUD.url.replace(/\/$/, "") + path, {method, headers: h, body: body ? JSON.stringify(body) : undefined});
-  const txt = await r.text(); let j = null; try { j = txt ? JSON.parse(txt) : null; } catch {}
-  if (!r.ok){ const e = new Error((j && (j.msg || j.error_description || j.message || j.error)) || ("Erro " + r.status)); e.status = r.status; throw e; }
-  return j;
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), 9000);
+  try {
+    const r = await fetch(CLOUD.url.replace(/\/$/, "") + path, {method, headers: h, body: body ? JSON.stringify(body) : undefined, signal: controller.signal});
+    clearTimeout(tid);
+    const txt = await r.text(); let j = null; try { j = txt ? JSON.parse(txt) : null; } catch {}
+    if (!r.ok){ const e = new Error((j && (j.msg || j.error_description || j.message || j.error)) || ("Erro " + r.status)); e.status = r.status; throw e; }
+    return j;
+  } catch(err){
+    clearTimeout(tid);
+    throw err;
+  }
 }
 function setSess(s){ sess = s; try { s ? localStorage.setItem(SESSKEY, JSON.stringify(s)) : localStorage.removeItem(SESSKEY); } catch {} }
 function guardaTokens(j){ setSess({access_token:j.access_token, refresh_token:j.refresh_token, expires_at:Date.now() + (j.expires_in || 3600) * 1000, user:{id:j.user.id, email:j.user.email}}); }
@@ -2041,9 +2049,13 @@ async function renova(){
   try { guardaTokens(await api("/auth/v1/token?grant_type=refresh_token", {method:"POST", auth:false, body:{refresh_token:sess.refresh_token}})); return true; }
   catch (e){ if (e.status === 400 || e.status === 401) setSess(null); return false; }
 }
-async function garante(){ if (sess && sess.expires_at - Date.now() < 60000) return renova(); return !!sess; }
+async function garante(){
+  if (!sess) return false;
+  if (sess.expires_at - Date.now() < 60000) return await renova();
+  return true;
+}
 
-const syncChip = (t, c) => { const el = $("#syncChip"); el.textContent = t; el.className = "chip " + (c || ""); };
+const syncChip = (t, c) => { const el = $("#syncChip"); if (el){ el.textContent = t; el.className = "chip " + (c || ""); } };
 let pushT = null, pushing = false, sujo = false;
 function agendaPush(){
   if (!nuvem() || !sess) return;
@@ -2054,7 +2066,7 @@ async function push(){
   if (pushing){ pushT = setTimeout(push, 700); return; }
   pushing = true;
   try {
-    if (!await garante()) throw new Error("sessão expirada");
+    if (!await garante()){ syncChip("Entre de novo", "bad"); lock(); return; }
     const ts = (S._ts ||= Date.now());
     await api("/rest/v1/caixa_state", {method:"POST", headers:{Prefer:"resolution=merge-duplicates,return=minimal"}, body:{user_id:sess.user.id, data:S, updated_at:new Date(ts).toISOString()}});
     if (S._ts === ts) sujo = false;
@@ -2066,17 +2078,24 @@ async function push(){
 }
 /** Busca a versão da nuvem; a mais recente (por _ts) vence. */
 async function pull(){
-  if (!nuvem() || !sess || sujo) return;
+  if (!nuvem()) return;
+  if (!sess){ syncChip("Toque para entrar", "w"); return; }
+  if (sujo) return;
+  syncChip("Conectando…", "w");
   try {
-    if (!await garante()) return;
+    if (!await garante()){ syncChip("Sessão expirada", "bad"); lock(); return; }
     const r = await api("/rest/v1/caixa_state?select=data&user_id=eq." + sess.user.id), remoto = r && r[0] && r[0].data;
     if (!remoto){ S._ts ||= Date.now(); agendaPush(); return; }
     if ((remoto._ts || 0) > (S._ts || 0)){ S = migrateState(remoto); try { localStorage.setItem(dataKey(), JSON.stringify(S)); } catch {} render(); syncChip("Sincronizado", "ok"); }
     else if ((remoto._ts || 0) < (S._ts || 0)) agendaPush();
     else syncChip("Sincronizado", "ok");
-  } catch { syncChip("Sem conexão · salvo no aparelho", "bad"); }
+  } catch (e){
+    syncChip("Sem conexão · salvo no aparelho", "bad");
+  }
 }
-document.addEventListener("visibilitychange", () => { if (!document.hidden) pull(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && nuvem() && sess) pull(); });
+window.addEventListener("online", () => { if (nuvem() && sess) pull(); });
+const sc = $("#syncChip"); if (sc) sc.onclick = () => { if (!sess) lock(); else pull(); };
 
 /* ═════════════ Acesso ═════════════
    Com banco configurado: login por e-mail e senha (Supabase Auth). Sem banco: senha local simples
