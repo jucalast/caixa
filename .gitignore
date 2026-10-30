@@ -1,8 +1,9 @@
-# Dependências e caches
 node_modules/
+.next/
 .netlify/
+.vercel/
 *.log
 *.zip
-
-# Builds temporários
-dist/
+*.tsbuildinfo
+next-env.d.ts
+.env*.local
