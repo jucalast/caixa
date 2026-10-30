@@ -616,6 +616,11 @@ main .qi{width:40px;height:40px;flex-shrink:0;background:rgba(255,255,255,.08)}
       <label class="field"><span class="lbl">Abate de qual dívida? (opcional)</span><select class="input" id="evDebt"></select></label>
       <div class="switch-group">
         <label class="switch" id="evFixaWrap"><span>Conta fixa mensal (recorrente)</span><input type="checkbox" id="evFixa"></label>
+        <div id="evPrazoWrap" class="field" style="margin-top:6px">
+          <span class="lbl">Prazo / Duração da conta fixa (ex: 35 meses)</span>
+          <input class="input" id="evPrazo" placeholder="Ex: 35 meses, 24 parcelas, indeterminado">
+          <span class="hint" style="font-size:11px">Informe o tempo restante deste compromisso</span>
+        </div>
         <label class="switch" id="evPagoWrap"><span id="evPagoLbl">Já foi pago</span><input type="checkbox" id="evPago"></label>
         <label class="switch" id="evEstWrap"><span>Valor ainda não confirmado</span><input type="checkbox" id="evEst"></label>
         <label class="switch" id="evAtrasarWrap"><span>Deixar atrasar (não abater agora)</span><input type="checkbox" id="evAtrasar"></label>
@@ -739,20 +744,21 @@ main .qi{width:40px;height:40px;flex-shrink:0;background:rgba(255,255,255,.08)}
         <input class="input" type="number" step="0.01" id="empValorParcela" value="620" required>
       </label>
       <div class="two">
-        <label class="field"><span class="lbl">Quantas parcelas faltam?</span>
-          <input class="input" type="number" min="1" max="120" id="empNumParcelas" required placeholder="Ex: 5">
-          <span class="hint">Quantidade de meses restantes</span>
+        <label class="field"><span class="lbl">Quantas parcelas faltam? (tempo restante)</span>
+          <input class="input" type="number" min="1" max="120" id="empNumParcelas" required placeholder="Ex: 35" value="35">
+          <span class="hint">Quantidade de meses</span>
         </label>
         <label class="field"><span class="lbl">Data da próxima parcela</span>
           <input class="input" type="date" id="empProxVenc" required value="2026-10-30">
         </label>
       </div>
-      <label class="field"><span class="lbl">Prazo final / Término do contrato</span>
-        <input class="input" type="date" id="empPrazoFinal" required>
+      <label class="field"><span class="lbl">Prazo / Duração desta conta fixa</span>
+        <input class="input" id="empPrazoTexto" value="35 meses" placeholder="Ex: 35 meses">
+        <span class="hint" id="empPrazoHint" style="font-size:11px">Exemplo: 35 meses</span>
       </label>
       <div class="actions" style="margin-top:12px">
         <button class="btn ghost" type="button" id="empCancel">Cancelar</button>
-        <button class="btn" type="submit">Salvar e atualizar projeção</button>
+        <button class="btn" type="submit">Salvar e regularizar empréstimo</button>
       </div>
     </div>
   </form>
@@ -826,8 +832,8 @@ main .qi{width:40px;height:40px;flex-shrink:0;background:rgba(255,255,255,.08)}
           <option value="atraso">Atrasos</option><option value="juros">Com juros</option><option value="cartao">Cartões</option><option value="familia">Família</option><option value="outro">Outras</option></select></label>
       </div>
       <div class="two" id="dbParcWrap">
-        <label class="field"><span class="lbl">Parcelas restantes (opcional)</span><input class="input" type="number" min="1" id="dbParcRestantes" placeholder="Ex: 5"></label>
-        <label class="field"><span class="lbl">Prazo / Vencimento final</span><input class="input" type="date" id="dbPrazo"></label>
+        <label class="field"><span class="lbl">Parcelas restantes (opcional)</span><input class="input" type="number" min="1" id="dbParcRestantes" placeholder="Ex: 35"></label>
+        <label class="field"><span class="lbl">Prazo / Duração (ex: 35 meses)</span><input class="input" id="dbPrazo" placeholder="Ex: 35 meses"></label>
       </div>
       <label class="field"><span class="lbl">Observação</span><input class="input" id="dbNota" placeholder="Opcional"></label>
       <div class="actions">
@@ -848,7 +854,7 @@ main .qi{width:40px;height:40px;flex-shrink:0;background:rgba(255,255,255,.08)}
    pública: quem protege os dados é o login + as regras (RLS) do supabase.sql. */
 const CLOUD = { url: "https://fjyxswswdedhlyjsgjnb.supabase.co", anonKey: "sb_publishable_OCKxCYioMtiYCHU-7Nocjg_Ywb295b9" };
 
-const AUTH_ENABLED = false; // Alterne para true para reativar o login e sincronização
+const AUTH_ENABLED = true; // Sincronização e autenticação ativadas no Supabase
 const KEY = "caixa.v1", PINKEY = "caixa.pin", THEMEKEY = "caixa.theme", SESSKEY = "caixa.sess";
 const nuvem = () => AUTH_ENABLED && !!(CLOUD.url && CLOUD.anonKey);
 let sess = null; try { sess = JSON.parse(localStorage.getItem(SESSKEY)); } catch {}
@@ -861,27 +867,27 @@ function seed(){
   const E = [];
   const add = (date, desc, tipo, valor, cat, o = {}) => E.push({id:id(), date, desc, tipo, valor, cat, pago:false, est:false, debt:"", fixa:true, ...o});
   // 30/10
-  add("2026-10-30","Salários (60%)","in",3720,"Salário");
+  add("2026-10-30","Salários (60%)","in",3720,"Salário",{prazo:"Mensal"});
   add("2026-10-30","Clínica do irmão (pontual)","out",1000,"Família",{fixa:false});
-  add("2026-10-30","Parcela do empréstimo","out",620,"Empréstimo",{debt:"d_emp620"});
+  add("2026-10-30","Parcela do empréstimo","out",620,"Empréstimo",{debt:"d_emp620",prazo:"35 meses"});
   for (const m of ["11","12"]){
     const p = d => `2026-${m}-${d}`;
-    add(p("01"),"Transporte","out",200,"Transporte");
-    add(p("01"),"Contas domésticas","out",150,"Casa");
-    add(p("06"),"Faculdade","out",1200,"Faculdade");
-    add(p("10"),"Financiamento Indaiatuba","out",1900,"Financiamento");
-    add(p("10"),"Condomínio Indaiatuba","out",550,"Moradia");
-    add(p("10"),"Energia elétrica","out",100,"Moradia");
-    add(p("10"),"Parcela apto SP (R$ 500)","out",500,"Financiamento");
-    add(p("12"),"Aluguel apto SP","in",1000,"Aluguel recebido");
-    add(p("15"),"Salários (40%)","in",2480,"Salário");
-    add(p("23"),"Parcela principal apto SP","out",1300,"Financiamento");
-    add(p("30"),"Salários (60%)","in",3720,"Salário");
-    add(p("30"),"Parcela do empréstimo","out",620,"Empréstimo",{debt:"d_emp620"});
+    add(p("01"),"Transporte","out",200,"Transporte",{prazo:"Mensal"});
+    add(p("01"),"Contas domésticas","out",150,"Casa",{prazo:"Mensal"});
+    add(p("06"),"Faculdade","out",1200,"Faculdade",{prazo:"24 meses"});
+    add(p("10"),"Financiamento Indaiatuba","out",1900,"Financiamento",{prazo:"360 meses"});
+    add(p("10"),"Condomínio Indaiatuba","out",550,"Moradia",{prazo:"Mensal"});
+    add(p("10"),"Energia elétrica","out",100,"Moradia",{prazo:"Mensal"});
+    add(p("10"),"Parcela apto SP (R$ 500)","out",500,"Financiamento",{prazo:"35 meses"});
+    add(p("12"),"Aluguel apto SP","in",1000,"Aluguel recebido",{prazo:"30 meses"});
+    add(p("15"),"Salários (40%)","in",2480,"Salário",{prazo:"Mensal"});
+    add(p("23"),"Parcela principal apto SP","out",1300,"Financiamento",{prazo:"35 meses"});
+    add(p("30"),"Salários (60%)","in",3720,"Salário",{prazo:"Mensal"});
+    add(p("30"),"Parcela do empréstimo","out",620,"Empréstimo",{debt:"d_emp620",prazo:"35 meses"});
   }
   // só novembro
   add("2026-11-20","Fatura cartão Caixa","out",900,"Cartão",{fixa:false});
-  add("2026-11-20","Próxima parcela da entrada do apto","out",800,"Financiamento");
+  add("2026-11-20","Próxima parcela da entrada do apto","out",800,"Financiamento",{prazo:"1 parcela"});
   add("2026-11-20","13º salário — 1ª parcela (50% bruto)","in",3100,"13º",{est:false,fixa:false});
   add("2026-11-30","Condomínio atrasado Indaiatuba","out",1689,"Dívida",{debt:"d1",fixa:false});
   add("2026-11-30","Parcela atrasada da entrada do apto","out",1163,"Dívida",{debt:"d2",fixa:false});
@@ -901,7 +907,7 @@ function seed(){
       {id:"d5", nome:"Fatura Nubank (parcelar)", valor:1300, grupo:"cartao", nota:"Venc. dia 9. Ligar no banco e parcelar antes do vencimento."},
       {id:"d6", nome:"Fatura cartão da Giovana (parcelar)", valor:3000, grupo:"cartao", nota:"Venc. dia 13. Limite totalmente comprometido."},
       {id:"d7", nome:"Sogro", valor:20000, grupo:"familia", nota:"Sem prazo e sem parcela acordada. Formalizar depois de estabilizar."},
-      {id:"d_emp620", nome:"Empréstimo (Parcela R$ 620)", valor:3100, grupo:"outro", nota:"Faltam informações de parcelas e prazo final", pendenteInfo:true, numParcelas:5, valorParcela:620, prazoFinal:""}
+      {id:"d_emp620", nome:"Empréstimo (Parcela R$ 620)", valor:21700, grupo:"outro", nota:"35 parcelas de R$ 620 · Prazo: 35 meses", pendenteInfo:false, numParcelas:35, valorParcela:620, prazo:"35 meses", prazoFinal:"2029-09-30"}
     ],
     cartoes: [
       {key:"nubank", nome:"Nubank", diaVenc:9, faturas:{"2026-11":1300, "2026-12":0}},
@@ -922,11 +928,39 @@ function migrateState(s){
   }
   let d620 = s.debts.find(d => d.id === "d_emp620" || /empr[ée]stimo.*620/i.test(d.nome));
   if (!d620){
-    d620 = {id:"d_emp620", nome:"Empréstimo (Parcela R$ 620)", valor:3100, grupo:"outro", nota:"Faltam informações de parcelas e prazo final", pendenteInfo:true, numParcelas:5, valorParcela:620, prazoFinal:""};
+    d620 = {id:"d_emp620", nome:"Empréstimo (Parcela R$ 620)", valor:21700, grupo:"outro", nota:"35 parcelas de R$ 620 · Prazo: 35 meses", pendenteInfo:false, numParcelas:35, valorParcela:620, prazo:"35 meses", prazoFinal:"2029-09-30"};
     s.debts.push(d620);
-  } else if (d620.pendenteInfo === undefined){
-    d620.pendenteInfo = !d620.prazoFinal;
+  } else {
+    // Se o usuário preencheu qualquer prazo ou parcelas, remove a pendência definitivamente
+    if (d620.numParcelas || d620.prazo || d620.prazoFinal){
+      d620.pendenteInfo = false;
+      d620.prazo ||= (d620.numParcelas ? `${d620.numParcelas} meses` : "35 meses");
+    }
   }
+
+  // Preenche prazos padrão nas contas fixas caso não tenham
+  const defPrazos = {
+    "Financiamento Indaiatuba": "360 meses",
+    "Faculdade": "24 meses",
+    "Parcela apto SP": "35 meses",
+    "Parcela principal apto SP": "35 meses",
+    "Parcela do empréstimo": "35 meses",
+    "Aluguel apto SP": "30 meses",
+    "Transporte": "Mensal",
+    "Contas domésticas": "Mensal",
+    "Condomínio Indaiatuba": "Mensal",
+    "Energia elétrica": "Mensal",
+    "Salários": "Mensal"
+  };
+  s.events.forEach(e => {
+    if (isFixa(e) && !e.prazo){
+      for (const [k, pz] of Object.entries(defPrazos)){
+        if (e.desc && e.desc.includes(k)){ e.prazo = pz; break; }
+      }
+      if (!e.prazo) e.prazo = "Mensal";
+    }
+  });
+
   s.cartoes ||= [
     {key:"nubank", nome:"Nubank", diaVenc:9, faturas:{"2026-11":1300, "2026-12":0}},
     {key:"caixa", nome:"Cartão Caixa", diaVenc:20, faturas:{"2026-11":900, "2026-12":0}},
@@ -1082,6 +1116,7 @@ function tx(e, r){
         <div class="t">
           <span class="t-name">${esc(e.desc)}</span>
           ${!e.pago ? `<span class="chip ${cl}">${st}</span>` : ""}
+          ${e.prazo ? `<span class="chip" style="font-size:10px;font-weight:600;background:rgba(255,255,255,.09);color:var(--text);border:1px solid rgba(255,255,255,.12)"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align:-1px;margin-right:2px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Prazo: ${esc(e.prazo)}</span>` : ""}
         </div>
         <div class="s">
           ${e.pago ? `<span class="chip ${cl}">${st}</span>` : ""}
@@ -1148,7 +1183,11 @@ function viewResumo(){
       <span>Na conta hoje</span>
       <button class="btn sm ghost" id="btnEditSaldo" style="padding:2px 10px;font-size:11px;height:24px;border-radius:var(--r-md);background:rgba(255,255,255,.18);border:0;color:#fff">Ajustar saldo</button>
     </div>
-    <div class="w-val num">${brl0(real).replace(/^(-?)R[$]\s?/, '$1<span class="cur">R$</span>')}</div>
+    <div class="w-val num">
+      ${(real !== 0 || S.saldoDefinido)
+        ? brl0(real).replace(/^(-?)R[$]\s?/, '$1<span class="cur">R$</span>')
+        : `<button id="btnDefSaldoProminent" style="background:none;border:0;color:#fff;font-size:22px;font-weight:700;text-decoration:underline;cursor:pointer;padding:0">Definir saldo em conta</button>`}
+    </div>
     <div class="w-pill ${dg ? "bad" : "ok"}">${dg ? SVG.alert + "Vai faltar dinheiro em " + fmtD(dg.inicio) : SVG.check + "Caixa coberto até 31/12"}</div>
     <div class="w-row">
       <div><small>Fecha dezembro com</small><b class="num">${brl0(fim)}</b></div>
@@ -1202,6 +1241,7 @@ function liEv(e, r){
       <div class="t" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <span>${esc(e.desc)}</span>
         ${!e.pago ? `<span class="chip ${cl}">${st}</span>` : ""}
+        ${e.prazo ? `<span class="chip" style="font-size:10px;font-weight:600;background:rgba(255,255,255,.09);color:var(--text);border:1px solid rgba(255,255,255,.12)"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align:-1px;margin-right:2px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Prazo: ${esc(e.prazo)}</span>` : ""}
       </div>
       <div class="s">
         ${e.pago ? `<span class="chip ${cl}">${st}</span> · ` : ""}
@@ -1298,7 +1338,7 @@ function viewCal(){
 
 function viewContas(){
   const ms = [...new Set(S.events.map(e => e.date.slice(0,7)))].sort();
-  if (!mes || (mes !== "all" && !ms.includes(mes))) mes = ms.includes(TODAY.slice(0,7)) ? TODAY.slice(0,7) : ms[0] || "all";
+  if (!mes || (mes !== "all" && !ms.includes(mes))) mes = "all";
 
   const evsMes = S.events.filter(e => mes === "all" || e.date.startsWith(mes));
   const fixas = evsMes.filter(e => isFixa(e));
@@ -1319,7 +1359,7 @@ function viewContas(){
       </div>
 
       <div class="chips scroll" style="margin-bottom:12px">
-        ${[...ms, "all"].map(m => `<button class="chip ${m===mes?"p":""}" data-mes="${m}">${m==="all"?"Tudo":MESES[+m.slice(5)-1]}</button>`).join("")}
+        ${["all", ...ms].map(m => `<button class="chip ${m===mes?"p":""}" data-mes="${m}">${m==="all"?"Todas as contas":MESES[+m.slice(5)-1]}</button>`).join("")}
       </div>
 
       <div class="minis">
@@ -1335,7 +1375,7 @@ function viewContas(){
       </div>
 
       <div class="row" style="margin-top:14px">
-        <span class="hint">${contasAba === "fixas" ? "Compromissos essenciais que se repetem todo mês." : "Gastos avulsos, imprevistos ou compras pontuais."}</span>
+        <span class="hint">${contasAba === "fixas" ? "Compromissos essenciais que se repetem todo mês com seus prazos." : "Gastos avulsos, imprevistos ou compras pontuais."}</span>
         <span class="sp"></span>
         <button class="btn sm" id="btnNovaConta">${contasAba === "fixas" ? "+ Nova conta fixa" : "+ Nova conta esporádica"}</button>
       </div>
@@ -1343,7 +1383,7 @@ function viewContas(){
   </div>
 
   <div class="cal-movs" style="padding:0">
-    <div class="sec-t" style="margin-top:6px">Lançamentos de ${contasAba === "fixas" ? "Contas Fixas" : "Contas Esporádicas"}</div>
+    <div class="sec-t" style="margin-top:6px">Lançamentos de ${contasAba === "fixas" ? "Contas Fixas" : "Contas Esporádicas"} (${mes === "all" ? "Todas as contas" : MESES[+mes.slice(5)-1]})</div>
     ${listaAtual.length ? porDia(listaAtual.map(e => ({e, r:null}))) : '<div class="empty">Nenhuma conta cadastrada nesta categoria para o período.</div>'}
     <span class="hint" style="display:block;margin-top:8px">Arraste para o lado para deixar atrasar sem excluir do planejamento. Toque para editar.</span>
   </div>`;
@@ -1574,6 +1614,7 @@ function bind(){
   v.querySelectorAll("[data-planfat]").forEach(b => b.onclick = () => openCardFat());
   const bn620 = $("#bannerEmp620"); if (bn620) bn620.onclick = () => openEmp620Modal();
   const bEditS = $("#btnEditSaldo"); if (bEditS) bEditS.onclick = () => openSaldoModal();
+  const bDefS = $("#btnDefSaldoProminent"); if (bDefS) bDefS.onclick = () => openSaldoModal();
   const bNovaC = $("#btnNovaConta"); if (bNovaC) bNovaC.onclick = () => openEv(null, {fixa: contasAba === "fixas", cat: contasAba === "fixas" ? "Moradia" : "Outros"});
   const ey = $("#eye"); if (ey) ey.onclick = () => { const o = document.body.classList.toggle("oculto"); try { localStorage.setItem("caixa.oculto", o ? "1" : "0"); } catch {} };
   v.querySelectorAll("[data-q]").forEach(b => b.onclick = () => openEv(null, {tipo: b.dataset.q}));
@@ -1688,20 +1729,33 @@ function openEmp620Modal(){
   const d620 = S.debts.find(d => d.id === "d_emp620" || /empr[ée]stimo.*620/i.test(d.nome));
   if (d620){
     $("#empValorParcela").value = d620.valorParcela || 620;
-    $("#empNumParcelas").value = d620.numParcelas || 5;
-    $("#empPrazoFinal").value = d620.prazoFinal || "2027-02-28";
+    $("#empNumParcelas").value = d620.numParcelas || 35;
+    $("#empPrazoTexto").value = d620.prazo || (d620.numParcelas ? `${d620.numParcelas} meses` : "35 meses");
     const proxEv = S.events.find(e => e.cat === "Empréstimo" && !e.pago);
     if (proxEv) $("#empProxVenc").value = proxEv.date;
+    else $("#empProxVenc").value = "2026-10-30";
   }
   $("#dlgEmp620").showModal();
 }
+function calcEmpPrazo(){
+  const n = parseInt($("#empNumParcelas").value) || 0;
+  if (n > 0) $("#empPrazoTexto").value = `${n} meses`;
+}
+const empNumEl = $("#empNumParcelas");
+if (empNumEl) empNumEl.addEventListener("input", calcEmpPrazo);
 $("#empCancel").onclick = () => $("#dlgEmp620").close();
 $("#emp620Form").onsubmit = ev => {
   ev.preventDefault();
   const vParc = parseFloat($("#empValorParcela").value) || 620;
-  const nParc = parseInt($("#empNumParcelas").value) || 1;
-  const prox = $("#empProxVenc").value;
-  const prazo = $("#empPrazoFinal").value;
+  const nParc = parseInt($("#empNumParcelas").value) || 35;
+  const prox = $("#empProxVenc").value || "2026-10-30";
+  const prazoTxt = ($("#empPrazoTexto").value || "").trim() || `${nParc} meses`;
+
+  let [y,m,dia] = prox.split("-").map(Number);
+  let endY = y, endM = m + nParc - 1;
+  while (endM > 12){ endM -= 12; endY++; }
+  const prazoFinal = `${endY}-${String(endM).padStart(2,"0")}-${String(Math.min(dia,28)).padStart(2,"0")}`;
+
   let d620 = S.debts.find(d => d.id === "d_emp620" || /empr[ée]stimo.*620/i.test(d.nome));
   if (!d620){
     d620 = {id:"d_emp620", nome:"Empréstimo (Parcela R$ 620)", grupo:"outro"};
@@ -1709,19 +1763,32 @@ $("#emp620Form").onsubmit = ev => {
   }
   d620.valorParcela = vParc;
   d620.numParcelas = nParc;
-  d620.prazoFinal = prazo;
+  d620.prazo = prazoTxt;
+  d620.prazoFinal = prazoFinal;
   d620.valor = vParc * nParc;
   d620.pendenteInfo = false;
-  d620.nota = `${nParc} parcelas de ${brl0(vParc)} · Prazo final: ${fmtD(prazo)}`;
+  d620.nota = `${nParc} parcelas de ${brl0(vParc)} · Prazo: ${prazoTxt}`;
+
+  // Garante que todas as referências ao empréstimo de 620 fiquem regularizadas
+  S.debts.forEach(d => {
+    if (d.id === "d_emp620" || /empr[ée]stimo.*620/i.test(d.nome)){
+      d.pendenteInfo = false;
+      d.prazo = prazoTxt;
+      d.numParcelas = nParc;
+      d.valorParcela = vParc;
+      d.prazoFinal = prazoFinal;
+      d.nota = `${nParc} parcelas de ${brl0(vParc)} · Prazo: ${prazoTxt}`;
+    }
+  });
 
   // Atualiza parcelas no calendário
   S.events = S.events.filter(e => !(e.cat === "Empréstimo" && !e.pago));
-  let [y,m,dia] = prox.split("-").map(Number);
-  for (let i = 1; i <= nParc; i++){
-    const ult = new Date(y, m, 0).getDate();
+  let curY = y, curM = m;
+  for (let i = 1; i <= Math.min(nParc, 60); i++){
+    const ult = new Date(curY, curM, 0).getDate();
     S.events.push({
       id: uid(),
-      date: `${y}-${String(m).padStart(2,"0")}-${String(Math.min(dia,ult)).padStart(2,"0")}`,
+      date: `${curY}-${String(curM).padStart(2,"0")}-${String(Math.min(dia,ult)).padStart(2,"0")}`,
       desc: `Parcela empréstimo (${i}/${nParc})`,
       tipo: "out",
       valor: vParc,
@@ -1729,15 +1796,17 @@ $("#emp620Form").onsubmit = ev => {
       pago: false,
       est: false,
       debt: d620.id,
-      fixa: true
+      fixa: true,
+      prazo: prazoTxt
     });
-    m++;
-    if (m > 12){ m = 1; y++; }
+    curM++;
+    if (curM > 12){ curM = 1; curY++; }
   }
   save();
+  push(); // sincronização imediata
   $("#dlgEmp620").close();
   render();
-  toast("Empréstimo atualizado com sucesso!");
+  toast("Empréstimo regularizado com sucesso!");
 };
 
 /* ═════════════ Dialog Futuras Faturas dos Cartões ═════════════ */
@@ -1841,13 +1910,16 @@ function fillDebtSel(){ $("#evDebt").innerHTML = '<option value="">— nenhuma �
 function openEv(id, pre){
   fillDebtSel();
   editing = id ? S.events.find(e => e.id === id) : null;
-  const e = editing || {date: TODAY, desc:"", tipo:"out", valor:"", cat:"Outros", pago:false, est:false, atrasar:false, debt:"", fixa:false, ...pre};
+  const e = editing || {date: TODAY, desc:"", tipo:"out", valor:"", cat:"Outros", pago:false, est:false, atrasar:false, debt:"", fixa:false, prazo:"", ...pre};
   $("#evTitle").textContent = editing ? "Editar lançamento" : "Novo lançamento";
   setTipo(e.tipo); $("#evData").value = e.date; $("#evValor").value = e.valor; $("#evDesc").value = e.desc;
   syncValorWidth();
   $("#evCat").value = CATS.includes(e.cat) ? e.cat : "Outros"; $("#evDebt").value = e.debt || "";
   $("#evPago").checked = !!e.pago; $("#evEst").checked = !!e.est;
   $("#evFixa").checked = isFixa(e);
+  $("#evPrazo").value = e.prazo || "";
+  $("#evPrazoWrap").classList.toggle("hidden", !$("#evFixa").checked);
+  $("#evFixa").onchange = () => $("#evPrazoWrap").classList.toggle("hidden", !$("#evFixa").checked);
   $("#evAtrasarWrap").classList.toggle("hidden", e.tipo !== "out" || !!e.pago);
   $("#evAtrasar").checked = !!e.atrasar;
   $("#evRepWrap").classList.toggle("hidden", !!editing); $("#evRep").checked = false;
@@ -1865,9 +1937,10 @@ function openEv(id, pre){
 }
 $("#fab").onclick = () => openEv(null);
 $("#evCancel").onclick = () => dlg.close();
-$("#evDel").onclick = () => { S.events = S.events.filter(e => e !== editing); save(); dlg.close(); render(); toast("Lançamento excluído"); };
+$("#evDel").onclick = () => { S.events = S.events.filter(e => e !== editing); save(); push(); dlg.close(); render(); toast("Lançamento excluído"); };
 $("#evForm").onsubmit = ev => {
   ev.preventDefault();
+  const isFix = $("#evFixa").checked;
   const data = {
     date: $("#evData").value,
     desc: $("#evDesc").value.trim(),
@@ -1876,7 +1949,8 @@ $("#evForm").onsubmit = ev => {
     cat: $("#evCat").value,
     pago: $("#evPago").checked,
     est: $("#evEst").checked,
-    fixa: $("#evFixa").checked,
+    fixa: isFix,
+    prazo: isFix ? ($("#evPrazo").value.trim() || "Mensal") : "",
     atrasar: tipoSel === "out" ? $("#evAtrasar").checked : false,
     debt: tipoSel === "out" ? $("#evDebt").value : ""
   };
@@ -1907,25 +1981,39 @@ $("#evForm").onsubmit = ev => {
         S.events.push({id:uid(), ...data, pago:false, date:`${y}-${String(m).padStart(2,"0")}-${String(Math.min(d,last)).padStart(2,"0")}`}); }
     }
   }
-  save(); dlg.close(); render(); toast("Salvo");
+  save(); push(); dlg.close(); render(); toast("Salvo");
 };
 
 /* ═════════════ Dívidas ═════════════ */
 const dd = $("#dlgDebt"); let editD = null;
 function openDebt(id){
   editD = id ? S.debts.find(d => d.id === id) : null;
-  const d = editD || {nome:"", valor:"", grupo:"outro", nota:""};
+  const d = editD || {nome:"", valor:"", grupo:"outro", nota:"", prazo:""};
   $("#dbTitle").textContent = editD ? "Editar dívida" : "Nova dívida";
   $("#dbNome").value = d.nome; $("#dbValor").value = d.valor; $("#dbGrupo").value = d.grupo; $("#dbNota").value = d.nota || "";
+  $("#dbPrazo").value = d.prazo || d.prazoFinal || "";
+  $("#dbParcRestantes").value = d.numParcelas || "";
   $("#dbDel").classList.toggle("hidden", !editD); dd.showModal();
 }
 $("#dbCancel").onclick = () => dd.close();
-$("#dbDel").onclick = () => { if (!confirm("Excluir esta dívida? Os pagamentos ligados a ela ficam no calendário.")) return; S.events.forEach(e => { if (e.debt === editD.id) e.debt = ""; }); S.debts = S.debts.filter(d => d !== editD); save(); dd.close(); render(); };
+$("#dbDel").onclick = () => { if (!confirm("Excluir esta dívida? Os pagamentos ligados a ela ficam no calendário.")) return; S.events.forEach(e => { if (e.debt === editD.id) e.debt = ""; }); S.debts = S.debts.filter(d => d !== editD); save(); push(); dd.close(); render(); };
 $("#debtForm").onsubmit = ev => {
   ev.preventDefault();
-  const data = {nome:$("#dbNome").value.trim(), valor:parseFloat($("#dbValor").value) || 0, grupo:$("#dbGrupo").value, nota:$("#dbNota").value.trim()};
-  if (editD) Object.assign(editD, data); else S.debts.push({id:uid(), ...data});
-  save(); dd.close(); render();
+  const data = {
+    nome: $("#dbNome").value.trim(),
+    valor: parseFloat($("#dbValor").value) || 0,
+    grupo: $("#dbGrupo").value,
+    nota: $("#dbNota").value.trim(),
+    prazo: $("#dbPrazo") ? $("#dbPrazo").value.trim() : "",
+    numParcelas: parseInt($("#dbParcRestantes").value) || 0
+  };
+  if (editD){
+    Object.assign(editD, data);
+    if (editD.id === "d_emp620" || /empr[ée]stimo.*620/i.test(editD.nome)) editD.pendenteInfo = false;
+  } else {
+    S.debts.push({id:uid(), pendenteInfo:false, ...data});
+  }
+  save(); push(); dd.close(); render();
 };
 [dlg, dd, $("#dlgSaldoInicial"), $("#dlgFatPay"), $("#dlgEmp620"), $("#dlgCardFat"), $("#dlgCfg")].forEach(d => {
   if (d) d.addEventListener("click", e => { if (e.target === d) d.close(); });
@@ -1983,7 +2071,7 @@ async function pull(){
     if (!await garante()) return;
     const r = await api("/rest/v1/caixa_state?select=data&user_id=eq." + sess.user.id), remoto = r && r[0] && r[0].data;
     if (!remoto){ S._ts ||= Date.now(); agendaPush(); return; }
-    if ((remoto._ts || 0) > (S._ts || 0)){ S = remoto; S.todos ||= {}; try { localStorage.setItem(dataKey(), JSON.stringify(S)); } catch {} render(); syncChip("Sincronizado", "ok"); }
+    if ((remoto._ts || 0) > (S._ts || 0)){ S = migrateState(remoto); try { localStorage.setItem(dataKey(), JSON.stringify(S)); } catch {} render(); syncChip("Sincronizado", "ok"); }
     else if ((remoto._ts || 0) < (S._ts || 0)) agendaPush();
     else syncChip("Sincronizado", "ok");
   } catch { syncChip("Sem conexão · salvo no aparelho", "bad"); }
